@@ -29,25 +29,34 @@ jobs:
             ${{ runner.os }}-node-
 
       - name: Install dependencies
+        working-directory: backend   # 👈 explicitly run in backend folder
         run: npm install
 
       - name: Run security audit
+        working-directory: backend
         run: npm audit --audit-level=moderate
         continue-on-error: true
 
       - name: Lint code
+        working-directory: backend
         run: npx eslint .
         continue-on-error: true
 
   codeql-analysis:
     name: 🔍 CodeQL Security Scan
     runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
           languages: javascript
+
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
