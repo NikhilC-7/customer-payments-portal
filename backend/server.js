@@ -1,72 +1,90 @@
-// server.js
 import express from "express";
 import fs from "fs";
 import https from "https";
 import cors from "cors";
 import helmet from "helmet";
 import dotenv from "dotenv";
-import authRoutes from "./routes/auth.js";
 import hpp from "hpp";
-import xss from "xss-clean";
 import rateLimit from "express-rate-limit";
+import mongoose from "mongoose";
+import { RateLimiterMemory } from "rate-limiter-flexible";
 
-console.log("✅ Step 1: Imports loaded");
+import authRoutes from "./routes/auth.js";
+import employeeAuthRoutes from "./routes/employeeAuth.js";
+import customerAuthRoutes from "./routes/customerAuth.js";
 
 dotenv.config();
-console.log("✅ Step 2: dotenv loaded");
-
 const app = express();
+const PORT = process.env.PORT || 5000;
+
+// ----------------------------
+// CONNECT TO MONGODB
+// ----------------------------
+const mongoURI = process.env.MONGO_URI || "mongodb://127.0.0.1:27017/Cluster0";
+
+mongoose.connect(mongoURI, { useNewUrlParser: true, useUnifiedTopology: true })
+  .then(() => console.log("✅ MongoDB connected"))
+  .catch(err => console.error("❌ MongoDB connection error:", err));
+
+
+// ----------------------------
+// SECURITY MIDDLEWARE
+// ----------------------------
+app.use(hpp());
+app.use(helmet());
+
+// ----------------------------
+// CORS (allow local frontend)
+// ----------------------------
+
+app.use(
+  cors({
+    origin: ["http://localhost:5173", "https://localhost:5173"],
+    credentials: true,
+  })
+);
+
+// ----------------------------
+// BODY PARSING
+// ----------------------------
+app.use(express.json());
+
+// ----------------------------
+// RATE LIMITING
+// ----------------------------
 const generalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 200, // max requests per IP per windowMs
+  windowMs: 15 * 60 * 1000,
+  max: 100,
   standardHeaders: true,
   legacyHeaders: false,
+  message: "Too many requests, try again later.",
 });
-
-app.use(hpp());
-app.use(xss());
 app.use(generalLimiter);
 
-// Middleware
-app.use(express.json());
-app.use(cors());
-app.use(helmet());
-// Prevent parameter pollution
-import hpp from "hpp";
-app.use(hpp());
-
-// Sanitize input (against XSS)
-import xss from "xss-clean";
-app.use(xss());
-
-// Rate limiting (prevents brute-force attacks)
-import rateLimit from "express-rate-limit";
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per window
+const loginLimiter = new RateLimiterMemory({
+  points: 5,
+  duration: 15 * 60,
 });
-app.use(limiter);
 
-console.log("✅ Step 3: Middleware loaded");
+// ----------------------------
+// ROUTES
+// ----------------------------
+app.use("/api/auth", customerAuthRoutes);
+app.use("/api/employee/auth", employeeAuthRoutes);
 
-app.use(cors({
-  origin: "http://localhost:5173", // React app runs on port 5173
-  credentials: true
-}));
+// Optional test route
+app.get("/api/test", (req, res) => {
+  res.json({ message: "✅ Secure backend is running correctly!" });
+});
 
-// Routes
-app.use("/api/auth", authRoutes);
-console.log("✅ Step 4: Routes loaded");
-
-// HTTPS options
+// ----------------------------
+// HTTPS SERVER
+// ----------------------------
 const sslOptions = {
-  key: fs.readFileSync("server.key"),
-  cert: fs.readFileSync("server.crt"),
+  key: fs.readFileSync("./localhost+2-key.pem"),
+  cert: fs.readFileSync("./localhost+2.pem"),
 };
-console.log("✅ Step 5: SSL files loaded");
 
-// Start HTTPS server
-const PORT = process.env.PORT || 5000;
 https.createServer(sslOptions, app).listen(PORT, () => {
-  console.log(`✅ Server running on https://localhost:${PORT}`);
+  console.log(`✅ Server running securely at: https://localhost:${PORT}`);
 });

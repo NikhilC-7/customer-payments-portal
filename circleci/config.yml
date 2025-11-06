@@ -1,0 +1,31 @@
+version: 2.1
+orbs:
+node: circleci/node:4.1.0
+
+
+jobs:
+build:
+docker:
+- image: cimg/node:18.17
+steps:
+- checkout
+- node/with-cache:
+steps:
+- run: npm ci
+- run: npm test
+- run:
+name: Run SonarCloud scan
+command: |
+npm i -g sonar-scanner
+sonar-scanner \
+-Dsonar.projectKey=EmployeePortal \
+-Dsonar.organization=your-org \
+-Dsonar.sources=. \
+-Dsonar.host.url=https://sonarcloud.io \
+-Dsonar.login=$SONAR_TOKEN
+
+
+workflows:
+build_and_scan:
+jobs:
+- build
