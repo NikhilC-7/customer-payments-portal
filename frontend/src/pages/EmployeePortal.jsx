@@ -1,64 +1,50 @@
 import React, { useEffect, useState } from "react";
 import api from "../api/api";
 
-const EmployeePortal = () => {
-  const [payments, setPayments] = useState([]);
+export default function EmployeePortal() {
+  const [items, setItems] = useState([]);
+  const [msg, setMsg] = useState("");
 
-  const fetchPayments = async () => {
-    try {
-      const res = await api.get("/payments");
-      setPayments(res.data);
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const verifyPayment = async (id) => {
-    try {
-      await api.patch(`/payments/${id}/verify`);
-      fetchPayments();
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  useEffect(() => { fetchPayments(); }, []);
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data } = await api.get("/employee/payments");
+        setItems(data.items || []);
+      } catch (err) {
+        setMsg(err?.response?.data?.message || "Failed to load payments");
+      }
+    })();
+  }, []);
 
   return (
-    <div>
-      <h2>Employee Portal</h2>
-      <table>
+    <div style={{ maxWidth: 900, margin: "30px auto", padding: 16 }}>
+      <h2>Recent Payments</h2>
+      {msg && <p>{msg}</p>}
+      <table border="1" cellPadding="8" style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>
           <tr>
+            <th>Date</th>
             <th>Customer</th>
+            <th>Account</th>
+            <th>Reference</th>
             <th>Amount</th>
-            <th>Currency</th>
-            <th>Provider</th>
-            <th>Payee Account</th>
-            <th>SWIFT</th>
-            <th>Verified</th>
-            <th>Action</th>
           </tr>
         </thead>
         <tbody>
-          {payments.map(p => (
+          {items.map(p => (
             <tr key={p._id}>
-              <td>{p.customerId}</td>
+              <td>{new Date(p.createdAt).toLocaleString()}</td>
+              <td>{p.customer?.fullName}</td>
+              <td>{p.customer?.accountNumber}</td>
+              <td>{p.reference}</td>
               <td>{p.amount}</td>
-              <td>{p.currency}</td>
-              <td>{p.provider}</td>
-              <td>{p.payeeAccount}</td>
-              <td>{p.swiftCode}</td>
-              <td>{p.verified ? "Yes" : "No"}</td>
-              <td>
-                {!p.verified && <button onClick={() => verifyPayment(p._id)}>Verify</button>}
-              </td>
             </tr>
           ))}
+          {items.length === 0 && (
+            <tr><td colSpan="5">No payments yet</td></tr>
+          )}
         </tbody>
       </table>
     </div>
   );
-};
-
-export default EmployeePortal;
+}

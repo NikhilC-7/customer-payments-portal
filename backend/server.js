@@ -1,90 +1,78 @@
-import express from "express";
 import fs from "fs";
 import https from "https";
-import cors from "cors";
+import path from "path";
+import express from "express";
 import helmet from "helmet";
-import dotenv from "dotenv";
 import hpp from "hpp";
-import rateLimit from "express-rate-limit";
+import cors from "cors";
+import morgan from "morgan";
+import mongoSanitize from "express-mongo-sanitize";
+import Brute from "express-brute";
 import mongoose from "mongoose";
-import { RateLimiterMemory } from "rate-limiter-flexible";
+import dotenv from "dotenv";
 
-import authRoutes from "./routes/auth.js";
-import employeeAuthRoutes from "./routes/employeeAuth.js";
-import customerAuthRoutes from "./routes/customerAuth.js";
+import { router as authRouter } from "./src/routes/auth.js";
+import { router as employeeAuthRouter } from "./src/routes/employeeAuth.js";
+import { router as customerRouter } from "./src/routes/customer.js";
+import { router as employeeRouter } from "./src/routes/employee.js";
 
 dotenv.config();
 const app = express();
-const PORT = process.env.PORT || 5000;
 
-// ----------------------------
-// CONNECT TO MONGODB
-// ----------------------------
-const mongoURI = process.env.MONGO_URI || "mongodb://127.0.0.1:27017/Cluster0";
+// --- DB ---
+await mongoose.connect(process.env.MONGO_URI);
 
-mongoose.connect(mongoURI, { useNewUrlParser: true, useUnifiedTopology: true })
-  .then(() => console.log("✅ MongoDB connected"))
-  .catch(err => console.error("❌ MongoDB connection error:", err));
-
-
-// ----------------------------
-// SECURITY MIDDLEWARE
-// ----------------------------
+// --- Security middleware ---
+app.disable("x-powered-by");
+app.use(helmet({
+  contentSecurityPolicy: false // API only; CSP is typically enforced by frontend
+}));
 app.use(hpp());
-app.use(helmet());
+app.use(mongoSanitize());
+app.use(express.json({ limit: "10kb" }));
+app.use(express.urlencoded({ extended: false, limit: "10kb" }));
 
-// ----------------------------
-// CORS (allow local frontend)
-// ----------------------------
+// --- CORS ---
+app.use(cors({
+  origin: [process.env.FRONTEND_ORIGIN],
+  credentials: true
+}));
 
-app.use(
-  cors({
-    origin: ["http://localhost:5173", "https://localhost:5173"],
-    credentials: true,
-  })
-);
+// --- Logging ---
+app.use(morgan("combined"));
 
-// ----------------------------
-// BODY PARSING
-// ----------------------------
-app.use(express.json());
-
-// ----------------------------
-// RATE LIMITING
-// ----------------------------
-const generalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: "Too many requests, try again later.",
+// --- Brute force protection ---
+const store = new Brute.MemoryStore();
+const bruteGlobal = new Brute(store, {
+  freeRetries: 100,
+  minWait: 5 * 1000,
+  maxWait: 60 * 1000
 });
-app.use(generalLimiter);
-
-const loginLimiter = new RateLimiterMemory({
-  points: 5,
-  duration: 15 * 60,
+const bruteStrict = new Brute(store, {
+  freeRetries: 5,
+  minWait: 10 * 1000,
+  maxWait: 10 * 60 * 1000
 });
+app.use(bruteGlobal.prevent);
 
-// ----------------------------
-// ROUTES
-// ----------------------------
-app.use("/api/auth", customerAuthRoutes);
-app.use("/api/employee/auth", employeeAuthRoutes);
+// --- Routes ---
+app.get("/api/health", (req, res) => res.json({ ok: true, https: true }));
 
-// Optional test route
-app.get("/api/test", (req, res) => {
-  res.json({ message: "✅ Secure backend is running correctly!" });
-});
+// No registration routes. Accounts are seeded.
+app.use("/api/auth", bruteStrict.prevent, authRouter);
+app.use("/api/employee/auth", bruteStrict.prevent, employeeAuthRouter);
+app.use("/api/customer", customerRouter);
+app.use("/api/employee", employeeRouter);
 
-// ----------------------------
-// HTTPS SERVER
-// ----------------------------
-const sslOptions = {
-  key: fs.readFileSync("./localhost+2-key.pem"),
-  cert: fs.readFileSync("./localhost+2.pem"),
+// --- HTTPS server ---
+const keyPath = process.env.SSL_KEY || "certs/server.key";
+const certPath = process.env.SSL_CERT || "certs/server.crt";
+const ssl = {
+  key: fs.readFileSync(path.resolve(keyPath)),
+  cert: fs.readFileSync(path.resolve(certPath))
 };
 
-https.createServer(sslOptions, app).listen(PORT, () => {
-  console.log(`✅ Server running securely at: https://localhost:${PORT}`);
+const port = process.env.PORT || 5000;
+https.createServer(ssl, app).listen(port, () => {
+  console.log(`HTTPS API listening on https://localhost:${port}/api`);
 });

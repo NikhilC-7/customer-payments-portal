@@ -1,0 +1,76 @@
+name: CI Security & API
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+
+jobs:
+  security-and-api:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install backend deps
+        working-directory: backend
+        run: npm ci
+
+      - name: Install frontend deps
+        working-directory: frontend
+        run: npm ci
+
+      - name: Generate self-signed cert
+        working-directory: backend
+        run: |
+          mkdir -p certs
+          openssl req -x509 -newkey rsa:2048 -nodes \
+            -keyout certs/server.key -out certs/server.crt \
+            -days 365 -subj "/CN=localhost" \
+            -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
+
+      - name: Create backend .env
+        working-directory: backend
+        run: |
+          cat > .env <<'EOF'
+          MONGO_URI=mongodb://127.0.0.1:27017/payments-test
+          PORT=5000
+          JWT_SECRET=test_secret_change_me
+          FRONTEND_ORIGIN=http://localhost:5173
+          SSL_KEY=certs/server.key
+          SSL_CERT=certs/server.crt
+          EOF
+
+      - name: Start MongoDB
+        uses: supercharge/mongodb-github-action@1.10.0
+        with:
+          mongodb-version: '7.0'
+
+      - name: Seed DB
+        working-directory: backend
+        run: node seed.js
+
+      - name: Start backend (background)
+        working-directory: backend
+        run: |
+          nohup node server.js > server.log 2>&1 &
+          sleep 3
+          echo "Backend started"
+
+      - name: SCA - npm audit (backend)
+        working-directory: backend
+        run: npm audit --audit-level=high || true
+
+      - name: Install newman
+        run: npm i -g newman
+
+      - name: Run API tests
+        run: |
+          newman run tests/api.postman_collection.json \
+            --env-var baseUrl=https://localhost:5000/api \
+            --insecure

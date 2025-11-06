@@ -1,40 +1,33 @@
 import React, { useState } from "react";
-import api from "../api/api";
+import api, { setAuthToken } from "../api/api";
 import { useNavigate } from "react-router-dom";
 
-const CustomerLogin = ({ onLogin }) => {
+export default function CustomerLogin({ onLogin }) {
   const [form, setForm] = useState({ accountNumber: "", password: "" });
   const [message, setMessage] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const navigate = useNavigate();
 
-  const handleChange = (e) =>
-    setForm({ ...form, [e.target.name]: e.target.value });
+  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
-    if (!form.accountNumber || !form.password) {
-      return setMessage("All fields are required");
-    }
-
+    setMessage("");
+    setSubmitting(true);
     try {
-      const res = await api.post("/auth/login", form);
-
-      // Store JWT token
-      localStorage.setItem("token", res.data.token);
-
-      // Update App state
-      if (onLogin) onLogin(res.data.customer);
-
-      // Redirect to payment page
+      const { data } = await api.post("/auth/login", form);
+      setAuthToken(data.token);
+      onLogin?.(data.customer);
       navigate("/customer/payment");
     } catch (err) {
-      setMessage(err.response?.data?.message || "Server error");
+      setMessage(err?.response?.data?.message || "Login failed");
+    } finally {
+      setSubmitting(false);
     }
   };
 
   return (
-    <div>
+    <div style={{ maxWidth: 420, margin: "40px auto", padding: 16 }}>
       <h2>Customer Login</h2>
       <form onSubmit={handleSubmit}>
         <input
@@ -43,8 +36,10 @@ const CustomerLogin = ({ onLogin }) => {
           value={form.accountNumber}
           onChange={handleChange}
           required
+          pattern="[0-9]{10,12}"
+          title="10–12 digits"
+          style={{ width: "100%", padding: 8, marginBottom: 10 }}
         />
-        <br />
         <input
           type="password"
           name="password"
@@ -52,13 +47,13 @@ const CustomerLogin = ({ onLogin }) => {
           value={form.password}
           onChange={handleChange}
           required
+          style={{ width: "100%", padding: 8, marginBottom: 12 }}
         />
-        <br />
-        <button type="submit">Login</button>
+        <button type="submit" disabled={submitting} style={{ padding: "8px 14px" }}>
+          {submitting ? "Signing in..." : "Login"}
+        </button>
       </form>
-      <p>{message}</p>
+      {message ? <p style={{ marginTop: 12 }}>{message}</p> : null}
     </div>
   );
-};
-
-export default CustomerLogin;
+}

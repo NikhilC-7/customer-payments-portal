@@ -1,0 +1,84 @@
+{
+  "info": { "name": "Payments API", "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json" },
+  "item": [
+    {
+      "name": "Customer Login",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/auth/login",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"accountNumber\":\"009876543219\",\"password\":\"BlueRiver2025\"}"
+        }
+      }
+    },
+    {
+      "name": "Create Payment (customer token required)",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "if (!pm.globals.get('custToken')) {",
+              "  const login = { url: pm.variables.get('baseUrl') + '/auth/login', method:'POST', header:{'Content-Type':'application/json'}, body:{ mode:'raw', raw: JSON.stringify({ accountNumber:'009876543219', password:'BlueRiver2025' }) } };",
+              "  pm.sendRequest(login, (err, res) => {",
+              "    pm.globals.set('custToken', res.json().token);",
+              "  });",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{custToken}}" }
+        ],
+        "url": "{{baseUrl}}/customer/payments",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"amount\": 123.45, \"reference\": \"TESTPAY1\"}"
+        }
+      }
+    },
+    {
+      "name": "Employee Login",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/employee/auth/login",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"username\":\"clerk01\",\"password\":\"ClerkPass123\"}"
+        }
+      }
+    },
+    {
+      "name": "List Payments (employee token)",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "if (!pm.globals.get('empToken')) {",
+              "  const login = { url: pm.variables.get('baseUrl') + '/employee/auth/login', method:'POST', header:{'Content-Type':'application/json'}, body:{ mode:'raw', raw: JSON.stringify({ username:'clerk01', password:'ClerkPass123' }) } };",
+              "  pm.sendRequest(login, (err, res) => {",
+              "    pm.globals.set('empToken', res.json().token);",
+              "  });",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{empToken}}" }],
+        "url": "{{baseUrl}}/employee/payments"
+      }
+    }
+  ]
+}

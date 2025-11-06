@@ -1,103 +1,53 @@
-// CustomerPayment.jsx
 import React, { useState } from "react";
 import api from "../api/api";
-import { amountPattern, accountNumberPattern, swiftPattern } from "../utils/validators";
 
-const CustomerPayment = () => {
-  const [form, setForm] = useState({
-    amount: "",
-    currency: "USD",
-    provider: "SWIFT",
-    payeeAccount: "",
-    swiftCode: "",
-  });
+export default function CustomerPayment() {
+  const [amount, setAmount] = useState("");
+  const [reference, setReference] = useState("");
+  const [msg, setMsg] = useState("");
 
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
-
-  const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
-    setError("");
-    setMessage("");
-  };
-
-  const handleSubmit = async (e) => {
+  const submit = async (e) => {
     e.preventDefault();
-
-    // ✅ Client-side validation
-    if (!amountPattern.test(form.amount)) return setError("Invalid amount (e.g., 1000 or 250.50).");
-    if (!accountNumberPattern.test(form.payeeAccount)) return setError("Invalid account number (10–12 digits).");
-    if (!swiftPattern.test(form.swiftCode)) return setError("Invalid SWIFT code.");
-
+    setMsg("");
     try {
-      // ✅ Attempt request
-      const res = await api.post("/payments/create", form);
-
-      // ✅ Safely check for response
-      if (res && res.data) {
-        setMessage("✅ Payment submitted successfully");
-        setForm({
-          amount: "",
-          currency: "USD",
-          provider: "SWIFT",
-          payeeAccount: "",
-          swiftCode: "",
-        });
-      } else {
-        setError("⚠️ Server did not respond correctly. Please try again.");
-      }
+      const body = { amount: Number(amount), reference };
+      const { data } = await api.post("/customer/payments", body);
+      if (data.ok) {
+        setMsg(`Payment created: ${data.paymentId}`);
+        setAmount("");
+        setReference("");
+      } else setMsg("Payment failed");
     } catch (err) {
-      console.error("Payment submission error:", err);
-      setError(err.response?.data?.message || "Server error. Please try again later.");
+      setMsg(err?.response?.data?.message || "Payment failed");
     }
   };
 
   return (
-    <div style={{ maxWidth: "500px", margin: "auto", padding: "20px" }}>
-      <h2>Make a Payment</h2>
-      <form onSubmit={handleSubmit}>
+    <div style={{ maxWidth: 420, margin: "40px auto", padding: 16 }}>
+      <h2>Make Payment</h2>
+      <form onSubmit={submit}>
         <input
-          name="amount"
+          type="number"
+          step="0.01"
+          min="1"
+          max="1000000"
           placeholder="Amount"
-          value={form.amount}
-          onChange={handleChange}
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
           required
-        /><br/><br/>
-
-        <select name="currency" value={form.currency} onChange={handleChange}>
-          <option value="USD">USD</option>
-          <option value="EUR">EUR</option>
-          <option value="ZAR">ZAR</option>
-        </select><br/><br/>
-
-        <select name="provider" value={form.provider} onChange={handleChange}>
-          <option value="SWIFT">SWIFT</option>
-        </select><br/><br/>
-
+          style={{ width: "100%", padding: 8, marginBottom: 10 }}
+        />
         <input
-          name="payeeAccount"
-          placeholder="Payee Account"
-          value={form.payeeAccount}
-          onChange={handleChange}
+          placeholder="Reference (A-Z,0-9,_,-)"
+          value={reference}
+          onChange={(e) => setReference(e.target.value)}
+          pattern="[A-Za-z0-9_\-]{3,32}"
           required
-        /><br/><br/>
-
-        <input
-          name="swiftCode"
-          placeholder="SWIFT Code"
-          value={form.swiftCode}
-          onChange={handleChange}
-          required
-        /><br/><br/>
-
-        <button type="submit">Pay Now</button>
+          style={{ width: "100%", padding: 8, marginBottom: 12 }}
+        />
+        <button type="submit" style={{ padding: "8px 14px" }}>Submit Payment</button>
       </form>
-
-      {error && <p style={{ color: "red" }}>{error}</p>}
-      {message && <p style={{ color: "green" }}>{message}</p>}
+      {msg ? <p style={{ marginTop: 12 }}>{msg}</p> : null}
     </div>
   );
-};
-
-export default CustomerPayment;
-    
+}

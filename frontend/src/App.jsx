@@ -1,64 +1,72 @@
-import React, { useState, useEffect } from "react";
-import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import React, { useEffect, useState } from "react";
+import { BrowserRouter, Routes, Route, Navigate, Link } from "react-router-dom";
 
-import CustomerRegister from "./pages/CustomerRegister";
 import CustomerLogin from "./pages/CustomerLogin";
 import CustomerPayment from "./pages/CustomerPayment";
 import EmployeeLogin from "./pages/EmployeeLogin";
 import EmployeePortal from "./pages/EmployeePortal";
+import { setAuthToken } from "./api/api";
 
-const App = () => {
-  const [customer, setCustomer] = useState(null);
-  const [employee, setEmployee] = useState(null);
+function Protected({ allowed, redirectTo, children }) {
+  return allowed ? children : <Navigate to={redirectTo} replace />;
+}
 
-  // Try to load JWT from localStorage on mount
+export default function App() {
+  const [isCustomerAuthed, setIsCustomerAuthed] = useState(false);
+  const [isEmployeeAuthed, setIsEmployeeAuthed] = useState(false);
+
   useEffect(() => {
     const token = localStorage.getItem("token");
-    if (token) {
-      // You could decode JWT and set user type if you want
-      // For simplicity, we'll keep previous session
-    }
+    if (token) setAuthToken(token);
   }, []);
 
-  return (
-    <Router>
-      <Routes>
+  const logout = () => {
+    setAuthToken(null);
+    setIsCustomerAuthed(false);
+    setIsEmployeeAuthed(false);
+  };
 
-        {/* -------- Customer Routes -------- */}
-       <Route
-  path="/customer/register"
-  element={<CustomerRegister onRegister={setCustomer} />}
-/>
+  return (
+    <BrowserRouter>
+      <nav style={{ display: "flex", gap: 12, padding: 12, borderBottom: "1px solid #eee" }}>
+        <Link to="/customer/login">Customer Login</Link>
+        <Link to="/customer/payment">Make Payment</Link>
+        <Link to="/employee/login">Employee Login</Link>
+        <Link to="/employee/portal">Employee Portal</Link>
+        <button onClick={logout} style={{ marginLeft: "auto" }}>Logout</button>
+      </nav>
+
+      <Routes>
+        <Route path="/" element={<Navigate to="/customer/login" replace />} />
 
         <Route
           path="/customer/login"
-          element={<CustomerLogin onLogin={setCustomer} />}
+          element={<CustomerLogin onLogin={() => setIsCustomerAuthed(true)} />}
         />
         <Route
           path="/customer/payment"
           element={
-            customer ? <CustomerPayment /> : <Navigate to="/customer/login" />
+            <Protected allowed={!!localStorage.getItem("token") && isCustomerAuthed} redirectTo="/customer/login">
+              <CustomerPayment />
+            </Protected>
           }
         />
 
-        {/* -------- Employee Routes -------- */}
         <Route
           path="/employee/login"
-          element={<EmployeeLogin onLogin={setEmployee} />}
+          element={<EmployeeLogin onLogin={() => setIsEmployeeAuthed(true)} />}
         />
         <Route
           path="/employee/portal"
           element={
-            employee ? <EmployeePortal /> : <Navigate to="/employee/login" />
+            <Protected allowed={!!localStorage.getItem("token") && isEmployeeAuthed} redirectTo="/employee/login">
+              <EmployeePortal />
+            </Protected>
           }
         />
 
-        {/* -------- Default Route -------- */}
-        <Route path="/" element={<Navigate to="/customer/login" />} />
-
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-    </Router>
+    </BrowserRouter>
   );
-};
-
-export default App;
+}
