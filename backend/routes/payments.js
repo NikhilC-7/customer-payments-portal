@@ -1,54 +1,103 @@
-// server/payments.js
-const express = require('express');
+import express from "express";
+import Payment from "../models/Payment.js"; // MongoDB model
+import { requireAuth, requireRole } from "./auth.js";
+
 const router = express.Router();
-const { requireAuth, requireRole } = require('./auth');
 
-// list pending payments (employees and managers can view)
-router.get('/pending', requireAuth, requireRole('employee','manager'), async (req, res) => {
-  const { rows } = await pool.query('SELECT id, beneficiary_name, iban, amount, currency, reference FROM payments WHERE status=$1', ['pending']);
-  res.json(rows);
+// ----------------------------
+// Validation patterns
+// ----------------------------
+const accountNumberPattern = /^[0-9]{10,12}$/;
+const amountPattern = /^\d+(\.\d{1,2})?$/;
+const currencyPattern = /^[A-Z]{3}$/;
+const swiftPattern = /^[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}([A-Z0-9]{3})?$/;
+const descriptionPattern = /^[a-zA-Z0-9 ,.'-]{3,100}$/;
+
+// ----------------------------
+// CUSTOMER: create payment
+// ----------------------------
+
+router.post("/create", requireAuth, async (req, res) => {
+  try {
+    const { amount, currency, provider, payeeAccount, swiftCode, description } = req.body;
+
+    if (!amountPattern.test(amount)) return res.status(400).json({ message: "Invalid amount format." });
+    if (!accountNumberPattern.test(payeeAccount)) return res.status(400).json({ message: "Invalid account number." });
+    if (!currencyPattern.test(currency)) return res.status(400).json({ message: "Invalid currency code." });
+    if (provider === "SWIFT" && !swiftPattern.test(swiftCode)) return res.status(400).json({ message: "Invalid SWIFT code." });
+    if (description && !descriptionPattern.test(description)) return res.status(400).json({ message: "Invalid description." });
+
+    // Save to MongoDB
+    const payment = new Payment({
+      amount,
+      currency,
+      provider,
+      payeeAccount,
+      swiftCode,
+      description,
+      createdBy: req.user.id, // ✅ store customer ID
+    });
+
+    await payment.save();
+
+    res.json({ message: "✅ Payment created successfully", payment });
+  } catch (err) {
+    console.error("Payment submission error:", err);
+    res.status(500).json({ message: "Server error. Please try again later." });
+  }
 });
 
-// approve payment (only manager)
-router.post('/:id/approve', requireAuth, requireRole('manager'), whitelist([{ name: 'id', pattern: /^[0-9]+$/ }]), async (req, res) => {
-  const id = parseInt(req.params.id, 10);
-  await pool.query('UPDATE payments SET status=$1, approved_by=$2, approved_at=now() WHERE id=$3', ['approved', req.user.userId, id]);
-  res.json({ success: true });
+// ----------------------------
+// EMPLOYEE/MANAGER: list pending payments
+// ----------------------------
+router.get("/pending", requireAuth, requireRole("employee", "manager"), async (req, res) => {
+  try {
+    const payments = await Payment.find({ status: "pending" });
+    res.json(payments);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
 });
 
-// reject payment (manager or employee with audit)
-router.post('/:id/reject', requireAuth, requireRole('manager'), whitelist([{ name: 'id', pattern: /^[0-9]+$/ }, { name: 'reason', pattern: /^[A-Za-z0-9 \-_,.]{1,250}$/ }]), async (req, res) => {
-  const id = parseInt(req.params.id, 10);
-  const reason = req.body.reason;
-  await pool.query('UPDATE payments SET status=$1, rejection_reason=$2, rejected_by=$3, rejected_at=now() WHERE id=$4', ['rejected', reason, req.user.userId, id]);
-  res.json({ success: true });
+// ----------------------------
+// EMPLOYEE/MANAGER: approve payment (manager only)
+// ----------------------------
+router.post("/:id/approve", requireAuth, requireRole("manager"), async (req, res) => {
+  try {
+    const payment = await Payment.findById(req.params.id);
+    if (!payment) return res.status(404).json({ message: "Payment not found" });
+
+    payment.status = "approved";
+    payment.approvedBy = req.user.username || req.user.id;
+    await payment.save();
+
+    res.json({ success: true, payment });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
 });
 
-module.exports = router;
-// ✅ Define whitelist RegEx patterns
-const accountNumberPattern = /^[0-9]{10,12}$/;  // e.g., 10–12 digits only
-const amountPattern = /^\d+(\.\d{1,2})?$/;      // numbers with up to 2 decimals
-const currencyPattern = /^[A-Z]{3}$/;           // e.g., USD, ZAR, GBP
-const descriptionPattern = /^[a-zA-Z0-9 ,.'-]{3,100}$/; // clean, human text
+// ----------------------------
+// EMPLOYEE/MANAGER: reject payment (manager only)
+// ----------------------------
+router.post("/:id/reject", requireAuth, requireRole("manager"), async (req, res) => {
+  try {
+    const { reason } = req.body;
+    const payment = await Payment.findById(req.params.id);
+    if (!payment) return res.status(404).json({ message: "Payment not found" });
 
-router.post("/create", (req, res) => {
-  const { accountNumber, amount, currency, description } = req.body;
+    payment.status = "rejected";
+    payment.rejectedBy = req.user.username || req.user.id;
+    payment.rejectionReason = reason;
+    await payment.save();
 
-  // ✅ Apply whitelist checks
-  if (!accountNumberPattern.test(accountNumber))
-    return res.status(400).json({ message: "Invalid account number format." });
-
-  if (!amountPattern.test(amount))
-    return res.status(400).json({ message: "Invalid amount format." });
-
-  if (!currencyPattern.test(currency))
-    return res.status(400).json({ message: "Invalid currency code." });
-
-  if (!descriptionPattern.test(description))
-    return res.status(400).json({ message: "Invalid description." });
-
-  // Continue with payment logic...
-  res.json({ message: "✅ Payment created successfully." });
+    res.json({ success: true, payment });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
 });
 
 export default router;

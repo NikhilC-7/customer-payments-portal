@@ -9,12 +9,17 @@ import rateLimit from "express-rate-limit";
 import mongoose from "mongoose";
 import { RateLimiterMemory } from "rate-limiter-flexible";
 
+// ----------------------------
+// ROUTES
+// ----------------------------
 import authRoutes from "./routes/auth.js";
 import employeeAuthRoutes from "./routes/employeeAuth.js";
 import customerAuthRoutes from "./routes/customerAuth.js";
+import paymentRoutes from "./routes/payments.js";
 
 dotenv.config();
-const app = express();
+
+const app = express(); // ✅ app must be declared before using it
 const PORT = process.env.PORT || 5000;
 
 // ----------------------------
@@ -26,7 +31,6 @@ mongoose.connect(mongoURI, { useNewUrlParser: true, useUnifiedTopology: true })
   .then(() => console.log("✅ MongoDB connected"))
   .catch(err => console.error("❌ MongoDB connection error:", err));
 
-
 // ----------------------------
 // SECURITY MIDDLEWARE
 // ----------------------------
@@ -34,9 +38,8 @@ app.use(hpp());
 app.use(helmet());
 
 // ----------------------------
-// CORS (allow local frontend)
+// CORS
 // ----------------------------
-
 app.use(
   cors({
     origin: ["http://localhost:5173", "https://localhost:5173"],
@@ -71,6 +74,7 @@ const loginLimiter = new RateLimiterMemory({
 // ----------------------------
 app.use("/api/auth", customerAuthRoutes);
 app.use("/api/employee/auth", employeeAuthRoutes);
+app.use("/api/payments", paymentRoutes); // ✅ now safe because app exists
 
 // Optional test route
 app.get("/api/test", (req, res) => {

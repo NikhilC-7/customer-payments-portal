@@ -1,7 +1,5 @@
-// CustomerPayment.jsx
 import React, { useState } from "react";
 import api from "../api/api";
-import { amountPattern, accountNumberPattern, swiftPattern } from "../utils/validators";
 
 const CustomerPayment = () => {
   const [form, setForm] = useState({
@@ -10,10 +8,17 @@ const CustomerPayment = () => {
     provider: "SWIFT",
     payeeAccount: "",
     swiftCode: "",
+    description: "",
   });
-
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+
+  // ----------------------------
+  // Validation patterns
+  // ----------------------------
+  const amountPattern = /^\d+(\.\d{1,2})?$/; // e.g., 1000 or 250.50
+  const accountNumberPattern = /^[0-9]{10,12}$/;
+  const swiftPattern = /^[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}([A-Z0-9]{3})?$/;
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -23,32 +28,31 @@ const CustomerPayment = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError("");
+    setMessage("");
 
-    // ✅ Client-side validation
-    if (!amountPattern.test(form.amount)) return setError("Invalid amount (e.g., 1000 or 250.50).");
-    if (!accountNumberPattern.test(form.payeeAccount)) return setError("Invalid account number (10–12 digits).");
-    if (!swiftPattern.test(form.swiftCode)) return setError("Invalid SWIFT code.");
+    // ----------------------------
+    // Client-side validation
+    // ----------------------------
+    if (!amountPattern.test(form.amount)) return setError("Invalid amount format.");
+    if (!accountNumberPattern.test(form.payeeAccount)) return setError("Invalid account number.");
+    if (form.provider === "SWIFT" && !swiftPattern.test(form.swiftCode)) return setError("Invalid SWIFT code.");
 
     try {
-      // ✅ Attempt request
-      const res = await api.post("/payments/create", form);
+      const res = await api.post("/payments/create", form); // token is auto-attached via interceptor
 
-      // ✅ Safely check for response
-      if (res && res.data) {
-        setMessage("✅ Payment submitted successfully");
-        setForm({
-          amount: "",
-          currency: "USD",
-          provider: "SWIFT",
-          payeeAccount: "",
-          swiftCode: "",
-        });
-      } else {
-        setError("⚠️ Server did not respond correctly. Please try again.");
-      }
+      setMessage(res.data.message);
+      setForm({
+        amount: "",
+        currency: "USD",
+        provider: "SWIFT",
+        payeeAccount: "",
+        swiftCode: "",
+        description: "",
+      });
     } catch (err) {
-      console.error("Payment submission error:", err);
-      setError(err.response?.data?.message || "Server error. Please try again later.");
+      console.error("Payment error:", err);
+      setError(err.response?.data?.message || "Server error");
     }
   };
 
@@ -62,17 +66,15 @@ const CustomerPayment = () => {
           value={form.amount}
           onChange={handleChange}
           required
-        /><br/><br/>
+        />
+        <br /><br />
 
         <select name="currency" value={form.currency} onChange={handleChange}>
           <option value="USD">USD</option>
           <option value="EUR">EUR</option>
           <option value="ZAR">ZAR</option>
-        </select><br/><br/>
-
-        <select name="provider" value={form.provider} onChange={handleChange}>
-          <option value="SWIFT">SWIFT</option>
-        </select><br/><br/>
+        </select>
+        <br /><br />
 
         <input
           name="payeeAccount"
@@ -80,7 +82,8 @@ const CustomerPayment = () => {
           value={form.payeeAccount}
           onChange={handleChange}
           required
-        /><br/><br/>
+        />
+        <br /><br />
 
         <input
           name="swiftCode"
@@ -88,7 +91,16 @@ const CustomerPayment = () => {
           value={form.swiftCode}
           onChange={handleChange}
           required
-        /><br/><br/>
+        />
+        <br /><br />
+
+        <input
+          name="description"
+          placeholder="Description"
+          value={form.description}
+          onChange={handleChange}
+        />
+        <br /><br />
 
         <button type="submit">Pay Now</button>
       </form>
@@ -100,4 +112,3 @@ const CustomerPayment = () => {
 };
 
 export default CustomerPayment;
-    

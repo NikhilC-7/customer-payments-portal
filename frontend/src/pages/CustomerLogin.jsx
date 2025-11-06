@@ -12,22 +12,13 @@ const CustomerLogin = ({ onLogin }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
-    if (!form.accountNumber || !form.password) {
-      return setMessage("All fields are required");
-    }
-
     try {
       const res = await api.post("/auth/login", form);
 
-      // Store JWT token
       localStorage.setItem("token", res.data.token);
-
-      // Update App state
       if (onLogin) onLogin(res.data.customer);
 
-      // Redirect to payment page
-      navigate("/customer/payment");
+      navigate("/customer/payment"); // redirect after login
     } catch (err) {
       setMessage(err.response?.data?.message || "Server error");
     }
@@ -43,8 +34,7 @@ const CustomerLogin = ({ onLogin }) => {
           value={form.accountNumber}
           onChange={handleChange}
           required
-        />
-        <br />
+        /><br/>
         <input
           type="password"
           name="password"
@@ -52,8 +42,7 @@ const CustomerLogin = ({ onLogin }) => {
           value={form.password}
           onChange={handleChange}
           required
-        />
-        <br />
+        /><br/>
         <button type="submit">Login</button>
       </form>
       <p>{message}</p>
