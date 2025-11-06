@@ -1,78 +1,95 @@
+import express from "express";
 import fs from "fs";
 import https from "https";
-import path from "path";
-import express from "express";
-import helmet from "helmet";
-import hpp from "hpp";
 import cors from "cors";
-import morgan from "morgan";
-import mongoSanitize from "express-mongo-sanitize";
-import Brute from "express-brute";
-import mongoose from "mongoose";
+import helmet from "helmet";
 import dotenv from "dotenv";
+import hpp from "hpp";
+import rateLimit from "express-rate-limit";
+import mongoose from "mongoose";
+import { RateLimiterMemory } from "rate-limiter-flexible";
 
-import { router as authRouter } from "./src/routes/auth.js";
-import { router as employeeAuthRouter } from "./src/routes/employeeAuth.js";
-import { router as customerRouter } from "./src/routes/customer.js";
-import { router as employeeRouter } from "./src/routes/employee.js";
+import authRoutes from "./routes/auth.js";
+import employeeAuthRoutes from "./routes/employeeAuth.js";
+import customerAuthRoutes from "./routes/customerAuth.js";
 
 dotenv.config();
 const app = express();
+const PORT = process.env.PORT || 5000;
 
-// --- DB ---
-await mongoose.connect(process.env.MONGO_URI);
+// ----------------------------
+// CONNECT TO MONGODB
+// ----------------------------
+const mongoURI = process.env.MONGO_URI;
 
-// --- Security middleware ---
-app.disable("x-powered-by");
-app.use(helmet({
-  contentSecurityPolicy: false // API only; CSP is typically enforced by frontend
-}));
+mongoose.connect(mongoURI, { useNewUrlParser: true, useUnifiedTopology: true })
+  .then(() => console.log("✅ MongoDB connected"))
+  .catch(err => console.error("❌ MongoDB connection error:", err));
+
+
+// ----------------------------
+// SECURITY MIDDLEWARE
+// ----------------------------
 app.use(hpp());
-app.use(mongoSanitize());
-app.use(express.json({ limit: "10kb" }));
-app.use(express.urlencoded({ extended: false, limit: "10kb" }));
+app.use(helmet());
 
-// --- CORS ---
-app.use(cors({
-  origin: [process.env.FRONTEND_ORIGIN],
-  credentials: true
-}));
+// ----------------------------
+// CORS (allow local frontend)
+// ----------------------------
 
-// --- Logging ---
-app.use(morgan("combined"));
+app.use(
+  cors({
+    origin: ["http://localhost:5173", "https://localhost:5173"],
+    credentials: true,
+  })
+);
+// Redirect customers to frontend registration page
 
-// --- Brute force protection ---
-const store = new Brute.MemoryStore();
-const bruteGlobal = new Brute(store, {
-  freeRetries: 100,
-  minWait: 5 * 1000,
-  maxWait: 60 * 1000
+
+
+// ----------------------------
+// BODY PARSING
+// ----------------------------
+app.use(express.json());
+
+// ----------------------------
+// RATE LIMITING
+// ----------------------------
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: "Too many requests, try again later.",
 });
-const bruteStrict = new Brute(store, {
-  freeRetries: 5,
-  minWait: 10 * 1000,
-  maxWait: 10 * 60 * 1000
+app.use(generalLimiter);
+
+const loginLimiter = new RateLimiterMemory({
+  points: 5,
+  duration: 15 * 60,
 });
-app.use(bruteGlobal.prevent);
 
-// --- Routes ---
-app.get("/api/health", (req, res) => res.json({ ok: true, https: true }));
+// ----------------------------
+// ROUTES
+// ----------------------------
+app.use("/api/auth", customerAuthRoutes);
+app.use("/api/employee/auth", employeeAuthRoutes);
 
-// No registration routes. Accounts are seeded.
-app.use("/api/auth", bruteStrict.prevent, authRouter);
-app.use("/api/employee/auth", bruteStrict.prevent, employeeAuthRouter);
-app.use("/api/customer", customerRouter);
-app.use("/api/employee", employeeRouter);
-
-// --- HTTPS server ---
-const keyPath = process.env.SSL_KEY || "certs/server.key";
-const certPath = process.env.SSL_CERT || "certs/server.crt";
-const ssl = {
-  key: fs.readFileSync(path.resolve(keyPath)),
-  cert: fs.readFileSync(path.resolve(certPath))
+// Optional test route
+app.get("/api/test", (req, res) => {
+  res.json({ message: "✅ Secure backend is running correctly!" });
+});
+app.get("/register", (req, res) => {
+  res.redirect("http://localhost:5173/register");
+});
+// ----------------------------
+// HTTPS SERVER
+// ----------------------------
+const sslOptions = {
+  key: fs.readFileSync("./localhost+2-key.pem"),
+  cert: fs.readFileSync("./localhost+2.pem"),
 };
 
-const port = process.env.PORT || 5000;
-https.createServer(ssl, app).listen(port, () => {
-  console.log(`HTTPS API listening on https://localhost:${port}/api`);
+https.createServer(sslOptions, app).listen(PORT, () => {
+  console.log(`✅ Server running securely at: https://localhost:${PORT}`);
 });
