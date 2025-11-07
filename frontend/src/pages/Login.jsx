@@ -22,7 +22,7 @@ const Login = () => {
 
     try {
       if (form.role === "employee") {
-        // ✅ Static employee credentials
+        // Static employee credentials
         const EMPLOYEE_USERNAME = "admin";
         const EMPLOYEE_PASSWORD = "secure123";
 
@@ -32,12 +32,12 @@ const Login = () => {
         ) {
           localStorage.setItem("role", "employee");
           setMessage("✅ Employee login successful!");
-          navigate("/employee"); // ✅ must match App.jsx route
+          navigate("/employee");
         } else {
           setMessage("❌ Invalid employee credentials.");
         }
       } else {
-        // ✅ Customer login through API
+        // Customer login through API
         const res = await api.post("/auth/login", {
           accountNumber: form.accountNumber,
           password: form.password,
@@ -46,7 +46,7 @@ const Login = () => {
         localStorage.setItem("token", res.data.token);
         localStorage.setItem("role", "customer");
         setMessage("✅ Customer login successful!");
-        navigate("/payment"); // ✅ must match App.jsx route
+        navigate("/payment");
       }
     } catch (err) {
       console.error("Login error:", err);
@@ -97,6 +97,26 @@ const Login = () => {
       </form>
 
       {message && <p style={{ marginTop: "10px" }}>{message}</p>}
+
+      {/* ---------------------------- */}
+      {/* Register button for customers */}
+      {/* ---------------------------- */}
+      {form.role === "customer" && (
+        <button
+          onClick={() => navigate("/register")}
+          style={{
+            width: "100%",
+            padding: "10px",
+            marginTop: "10px",
+            backgroundColor: "#4CAF50",
+            color: "white",
+            border: "none",
+            cursor: "pointer",
+          }}
+        >
+          Register
+        </button>
+      )}
     </div>
   );
 };

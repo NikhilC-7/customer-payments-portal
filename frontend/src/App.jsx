@@ -4,6 +4,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-d
 import CustomerPayment from "./pages/CustomerPayment";
 import EmployeePortal from "./pages/EmployeePortal";
 import Login from "./pages/Login";
+import CustomerRegister from "./pages/CustomerRegister"; // ✅ Import register page
 import Unauthorized from "./pages/Unauthorized";
 import ProtectedRoute from "./components/ProtectedRoute";
 
@@ -16,6 +17,7 @@ function App() {
 
         {/* Public routes */}
         <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<CustomerRegister />} /> {/* ✅ Register route */}
         <Route path="/unauthorized" element={<Unauthorized />} />
 
         {/* Customer payment route */}
