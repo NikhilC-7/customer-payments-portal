@@ -59,15 +59,17 @@ cd backend
 
 npm install
 
-3. Create a .env file with the following values (update as needed):
+3. Create account at mongo atlas database, Create your cluster and fetch your connection string
+
+4. Create a .env file with the following values (update as needed):
 
 PORT=5000
-MONGO_URI=<Your MongoDB Atlas connection string>
+MONGO_URI=<Your MongoDB Atlas connection string> (Put in your own created password)
 STATIC_KEY=valterra123
 
 4. Start the backend server:
 
-npm run dev
+node server.js
 
 The backend will run at http://localhost:5000.
 
