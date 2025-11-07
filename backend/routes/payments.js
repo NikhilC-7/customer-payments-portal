@@ -78,7 +78,7 @@ router.get("/", verifyStaticEmployee, async (req, res) => {
 // ----------------------------
 // EMPLOYEE: approve payment
 // ----------------------------
-router.patch("/:id/approve", verifyStaticEmployee, async (req, res) => {
+router.post("/:id/approve", verifyStaticEmployee, async (req, res) => {
   try {
     const payment = await Payment.findById(req.params.id);
     if (!payment) return res.status(404).json({ message: "Payment not found." });
@@ -98,14 +98,14 @@ router.patch("/:id/approve", verifyStaticEmployee, async (req, res) => {
 // ----------------------------
 // EMPLOYEE: reject payment
 // ----------------------------
-router.patch("/:id/reject", verifyStaticEmployee, async (req, res) => {
+router.post("/:id/reject", verifyStaticEmployee, async (req, res) => {
   try {
     const payment = await Payment.findById(req.params.id);
     if (!payment) return res.status(404).json({ message: "Payment not found." });
 
     const { reason } = req.body;
     if (!reason || reason.length < 3) {
-      return res.status(400).json({ message: "Rejection reason is required." });
+      return res.status(400).json({ message: "Rejection reason is required 3 characters or more." });
     }
 
     payment.status = "rejected";
