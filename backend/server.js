@@ -8,6 +8,7 @@ import hpp from "hpp";
 import rateLimit from "express-rate-limit";
 import mongoose from "mongoose";
 import { RateLimiterMemory } from "rate-limiter-flexible";
+import employeeRoutes from "./routes/employee.js";
 
 // ----------------------------
 // ROUTES
@@ -75,6 +76,7 @@ const loginLimiter = new RateLimiterMemory({
 app.use("/api/auth", customerAuthRoutes);
 app.use("/api/employee/auth", employeeAuthRoutes);
 app.use("/api/payments", paymentRoutes); // ✅ now safe because app exists
+app.use("/api/employee", employeeRoutes);
 
 // Optional test route
 app.get("/api/test", (req, res) => {
